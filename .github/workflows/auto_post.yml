@@ -17,29 +17,24 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Google GenAI Library
-        run: pip install google-genai
-
       - name: Run AI Post Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python -c "
           import os
+          import json
+          import urllib.request
           import datetime
-          from google import genai
 
-          # 구글 Gemini API 클라이언트 초기화
-          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
-
+          api_key = os.environ['GEMINI_API_KEY']
           now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
-          # AI에게 내릴 지시사항 (프롬프트)
           prompt = '''
           너는 대중들이 자주 검색하는 핫 트렌드 및 생활/디지털 정보 블로그 에디터야.
-          사람들이 검색을 많이 하는 실생활 유용한 주제(예: IT 꿀팁, 스마트폰 기능, 정부 지원금, 가성비 생활 팁, AI 활용법 등) 중 하나를 무작위로 골라서, HTML 형식으로 블로그 포스팅 본문을 작성해줘.
+          실생활에 유용한 주제(IT 꿀팁, 스마트폰 기능, 정부 지원금, 가성비 생활 팁 등) 중 하나를 골라 HTML 형식으로 블로그 포스팅 본문을 작성해줘.
           
-          반드시 아래 HTML 구조와 태그를 지켜서 출력해줘 (마크다운 백틱 ```html 나 ``` 없이 순수 HTML 코드만 작성할 것):
+          반드시 아래 HTML 구조를 지켜서 순수 HTML 코드만 작성해줘 (백틱 ```html 등은 절대 포함하지 말고 내용만 출력할 것):
           
           <h2>🔥 [주제에 맞는 매력적인 제목]</h2>
           <p style=\"color: #666; font-size: 0.9em;\">발행일시: ''' + now + ''' | 작성자: AI 핫트렌드 봇</p>
@@ -63,22 +58,34 @@ jobs:
           </blockquote>
           '''
 
-          # Gemini 모델 호출 (가장 가볍고 빠른 gemini-2.5-flash 사용)
-          response = client.models.generate_content(
-              model='gemini-2.5-flash',
-              contents=prompt,
+          url = f'[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){api_key}'
+          
+          data = {
+              'contents': [{
+                  'parts': [{'text': prompt}]
+              }]
+          }
+          
+          req = urllib.request.Request(
+              url,
+              data=json.dumps(data).encode('utf-8'),
+              headers={'Content-Type': 'application/json'}
           )
-          
-          ai_post_html = response.text.strip()
-          
-          # 래퍼 article 태그로 감싸기
+
+          try:
+              with urllib.request.urlopen(req) as response:
+                  res_data = json.loads(response.read().decode('utf-8'))
+                  ai_post_html = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
+          except Exception as e:
+              print(f'API Error: {e}')
+              exit(1)
+
           new_post = f'''
           <article class=\"post\">
           {ai_post_html}
           </article>
           '''
 
-          # index.html 파일에 삽입
           with open('index.html', 'r', encoding='utf-8') as f:
               content = f.read()
           
