@@ -1,0 +1,50 @@
+name: AI Daily Auto Post Pipeline
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 매일 자동으로 실행 (UTC 기준 0시)
+  workflow_dispatch: # 수동으로 버튼 눌러서 바로 실행도 가능
+
+jobs:
+  build-and-post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run Auto Post Script
+        run: |
+          python -c "
+          import datetime
+          now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+          
+          # 새로운 게시글 추가 스크립트
+          new_post = f'''
+          <div class=\"post\">
+              <h2>🤖 [자동 발행] {now} AI 트렌드 & 이슈 리포트</h2>
+              <p>본 포스팅은 파이프라인에 의해 자동으로 수집 및 발행된 최신 트렌드 정보입니다.</p>
+          </div>
+          '''
+          
+          with open('index.html', 'r', encoding='utf-8') as f:
+              content = f.read()
+          
+          # index.html의 content 영역에 새 글 삽입
+          updated_content = content.replace('<div class=\"content\">', '<div class=\"content\">\n' + new_post)
+          
+          with open('index.html', 'w', encoding='utf-8') as f:
+              f.write(updated_content)
+          "
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "Auto-Bot"
+          git config --global user.email "bot@auto.com"
+          git add index.html
+          git commit -m "Auto: Update daily post" || exit 0
+          git push
