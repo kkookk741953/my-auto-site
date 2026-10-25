@@ -27,8 +27,10 @@ jobs:
           import urllib.request
           import datetime
 
-          api_key = os.environ['GEMINI_API_KEY']
+          api_key = os.environ.get('GEMINI_API_KEY', '')
           now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+
+          ai_post_html = ''
 
           prompt = '''
           너는 대중들이 자주 검색하는 핫 트렌드 및 생활/디지털 정보 블로그 에디터야.
@@ -58,27 +60,36 @@ jobs:
           </blockquote>
           '''
 
-          url = f'[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){api_key}'
-          
-          data = {
-              'contents': [{
-                  'parts': [{'text': prompt}]
-              }]
-          }
-          
-          req = urllib.request.Request(
-              url,
-              data=json.dumps(data).encode('utf-8'),
-              headers={'Content-Type': 'application/json'}
-          )
-
           try:
+              url = f'[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){api_key}'
+              data = {'contents': [{'parts': [{'text': prompt}]}]}
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(data).encode('utf-8'),
+                  headers={'Content-Type': 'application/json'}
+              )
               with urllib.request.urlopen(req) as response:
                   res_data = json.loads(response.read().decode('utf-8'))
                   ai_post_html = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
           except Exception as e:
-              print(f'API Error: {e}')
-              exit(1)
+              print(f'API 통신 중 오류 발생 (기본 템플릿으로 대체): {e}')
+              ai_post_html = '''
+              <h2>🔥 일상 속 유용한 디지털 꿀팁 모음</h2>
+              <p style=\"color: #666; font-size: 0.9em;\">발행일시: ''' + now + ''' | 작성자: AI 핫트렌드 봇</p>
+              <hr style=\"border: 0; height: 1px; background: #eee; margin: 15px 0;\">
+              <p>본 포스팅은 실생활에 유용한 최신 트렌드 및 필수 정보 리포트입니다.</p>
+              <h3>1. 스마트폰 최적화 관리</h3>
+              <p>불필요한 앱 캐시를 정리하여 기기 속도를 유지하세요.</p>
+              <h3>2. 정기적인 데이터 백업</h3>
+              <p>중요한 파일은 클라우드에 수시로 백업하는 것이 안전합니다.</p>
+              <h3>3. 배터리 수명 관리</h3>
+              <p>급속 충전 사용 시 발열 관리에 유의하세요.</p>
+              <h3>4. 보안 설정 강화</h3>
+              <p>2단계 인증을 활성화하여 개인정보를 보호하세요.</p>
+              <blockquote style=\"background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; border-radius: 4px;\">
+                  <b>💡 핵심 요약:</b> 작은 습관이 기기 수명과 업무 효율을 높여줍니다.
+              </blockquote>
+              '''
 
           new_post = f'''
           <article class=\"post\">
@@ -89,8 +100,12 @@ jobs:
           with open('index.html', 'r', encoding='utf-8') as f:
               content = f.read()
           
-          updated_content = content.replace('<div class=\"content\">', '<div class=\"content\">\n' + new_post)
-          
+          # 만약 index.html에 <div class=\"content\">가 없으면 맨 아래 body 태그 위에 삽입하도록 방어
+          if '<div class=\"content\">' in content:
+              updated_content = content.replace('<div class=\"content\">', '<div class=\"content\">\n' + new_post)
+          else:
+              updated_content = content.replace('</body>', new_post + '\n</body>')
+
           with open('index.html', 'w', encoding='utf-8') as f:
               f.write(updated_content)
           "
